@@ -1,0 +1,50 @@
+pipeline{
+    agent any
+    tools { go '1.20' }
+    stages {
+    stage('check go version') {
+      steps {
+        // Output will be something like "go version go1.19 darwin/arm64"
+        sh 'go version'
+      }
+    }
+        stage('check out and build'){
+            steps{
+                git credentialsId: 'sahana-git-PAT', url: 'https://github.com/SahanaGowdaBV/go-microservices.git'
+            }
+        }
+        stage('build the application'){
+            steps{
+                sh "go mod download"
+                sh "go build -o app "
+            }
+        }
+    //     stage('test'){
+    //         steps{
+    //             //run some unit tests
+    //             sh "go test"
+    //         }
+    //     }
+    //     stage('deploy and run'){
+    //         steps{
+    //             sh "nohup go run main.go 2>&1 &"
+    //     }
+    // }
+    stage('create docker image'){
+            steps{
+                sh "docker build -t go-app-ms:${BUILD_NUMBER} ."
+                sh "docker tag go-app-ms:${BUILD_NUMBER} sahanabv/go-app-ms:${BUILD_NUMBER}"
+                withCredentials([usernamePassword(credentialsId: 'sahana-docker-new', passwordVariable: 'pass', usernameVariable: 'user')]) {
+                    sh "docker login -u ${user} -p ${pass}"
+                    sh "docker push sahanabv/app:${BUILD_NUMBER}"
+                }
+            }
+        }
+        stage('deploy to k8s'){
+            steps{
+                sh "kubectl apply -f kubernetes/"
+                sh "kubectl get all"
+            }
+        }
+}
+}
